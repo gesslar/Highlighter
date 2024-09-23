@@ -23,6 +23,7 @@ Highlighter = {
   },
   highlighting = false,
   highlight_colour = nil,
+  previous_room_id = nil,
 }
 
 table.unpack = table.unpack or unpack
@@ -136,11 +137,11 @@ function Highlighter:EventHandler(event, ...)
     return
   end
   if event == "sysSpeedwalkStarted" then
-    self:OnStarted(...)
+    self:OnStarted()
     return
   end
   if event == "sysSpeedwalkFinished" then
-    self:OnComplete(...)
+    self:OnComplete()
     return
   end
 end
@@ -166,20 +167,23 @@ function Highlighter:OnConnected(...)
   self.route = {}
 end
 
-function Highlighter:OnStarted(room_id)
-  self:HighlightRoute(room_id)
+function Highlighter:OnStarted()
+  local room_id = getPlayerRoom()
+
+  self.previous_room_id = room_id
   self.highlighting = true
+  self:HighlightRoute(room_id)
 end
 
-function Highlighter:OnMoved(current_room_id, previous_room_id)
+function Highlighter:OnMoved(current_room_id)
   if not self.highlighting or not next(self.route) then
     return
   end
 
-  if previous_room_id then
-    if self.route[previous_room_id] then
-      if not self.route[previous_room_id].timer then
-        self:UnhighlightRoom(previous_room_id)
+  if self.previous_room_id then
+    if self.route[self.previous_room_id] then
+      if not self.route[self.previous_room_id].timer then
+        self:UnhighlightRoom(self.previous_room_id)
       end
     end
   end
@@ -187,6 +191,7 @@ function Highlighter:OnMoved(current_room_id, previous_room_id)
   if current_room_id then
     if not self.route[current_room_id] or (self.route[current_room_id] and not self.route[current_room_id].timer) then
       self:HighlightRoom(current_room_id)
+      self.previous_room_id = current_room_id
     end
   end
 end
@@ -196,7 +201,7 @@ function Highlighter:OnReset(exception, reason)
   self:Reset(exception)
 end
 
-function Highlighter:OnComplete(current_room_id)
+function Highlighter:OnComplete()
   self.highlighting = false
   self:Reset(false)
 end
@@ -207,6 +212,10 @@ end
 
 function Highlighter:Reset(force)
   self:RemoveHighlights(force)
+  self.previous_room_id = nil
+  if force then
+    self.route = {}
+  end
 end
 
 function Highlighter:HighlightRoom(room_id)
@@ -246,14 +255,12 @@ function Highlighter:FadeOutHighlight(room_id)
 
   if a <= 0 then
     unHighlightRoom(room_id)
+    killTimer(self.route[room_id].timer)
     table.remove(self.route, room_id)
     return
   end
 
   highlightRoom(room_id, r, g, b, 0, 0, 0, 1, a, 0)
-  self.route[room_id].timer = tempTimer(self.prefs.delay,
-    function() self:FadeOutHighlight(room_id) end,
-    false)
   self.route[room_id].step = fade_step
 end
 
@@ -267,7 +274,7 @@ function Highlighter:UnhighlightRoom(room_id)
 
   self.route[room_id] = {
     step = 0,
-    timer = tempTimer(0.1, function() self:FadeOutHighlight(room_id) end, false)
+    timer = tempTimer(0.1, function() self:FadeOutHighlight(room_id) end, true)
   }
 end
 
@@ -277,7 +284,7 @@ function Highlighter:RemoveHighlights(force)
   end
 
   for room_id, highlight in pairs(self.route) do
-    if force then
+    if force == true then
       unHighlightRoom(room_id)
       if highlight.timer then
         killTimer(highlight.timer)

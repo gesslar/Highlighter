@@ -35,7 +35,6 @@ this information to know when to begin fading the previous room.
 #### Arguments
 
 * `current room id` - The id of the room the player has arrived in.
-* `previous room id` - The id of the room the player was in before moving.
 
 ### `sysSpeedwalkStarted`
 
@@ -44,7 +43,7 @@ use this notification and information provided to highlight the route.
 
 #### Arguments
 
-* `current room id` - The id of the room is starting from.
+* `none` - No arguments are required.
 
 ### `sysSpeedwalkFinished`
 
@@ -53,11 +52,11 @@ notification to know when to fade all of the remaining highlights.
 
 #### Arguments
 
-* `current room id` - The id of the room the player has arrived in.
+* `none` - No arguments are required.
 
 None
 
-### `sysSpeedwalkReset`
+### `onSpeedwalkReset`
 
 Trigger this event when the speedwalk has been reset. Highlighter will use this
 notification immediately remove all highlights.
