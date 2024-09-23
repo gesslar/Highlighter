@@ -8,6 +8,7 @@ Syntax: highlight [command]
   highlight set <preference> <value> - Set a preference to a value
 
   Available preferences:
+    fade     - Set the fade state (default: on)
     step     - Set the granularity of the fade (default: 0.0)
     delay    - Set the speed of the fade (default: 0.0)
     colour   - Set the colour of the highlight (default: gold)
@@ -19,6 +20,7 @@ if command == "set" then
   else
     -- Show current preference settings
     cecho("Current preferences:\n")
+    cecho("  Fade: " .. Highlighter.prefs.fade .. "\n")
     cecho("  Step: " .. Highlighter.prefs.step .. "\n")
     cecho("  Delay: " .. Highlighter.prefs.delay .. "\n")
     cecho("  Colour: " .. Highlighter.prefs.colour .. "\n")

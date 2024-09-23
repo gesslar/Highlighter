@@ -15,8 +15,9 @@ In Mudlet, type `highlight` to see the help information for this package.
 * `highlight set <preference> <value>` - Set a preference to a value
 
   Available preferences:
-  * `step` - Set the granularity of the fade (default: 0.0)
-  * `delay` - Set the speed of the fade (default: 0.0)
+  * `fade` - Enable or disable the fade effect (default: on)
+  * `step` - Set the granularity of the fade (default: 10)
+  * `delay` - Set the speed of the fade (default: 0.05)
   * `colour` - Set the colour of the highlight (default: gold)
 
 Note that the colour must be a valid Mudlet colour name.

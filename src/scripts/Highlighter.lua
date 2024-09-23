@@ -6,6 +6,7 @@ Highlighter = {
     preferences_file = "Highlighter.Preferences.lua",
   },
   default = {
+    fade = "on",
     step = 10,
     delay = 0.05,
     colour = "gold",
@@ -45,6 +46,9 @@ function Highlighter:LoadPreferences()
 
   self.prefs = prefs
 
+  if not self.prefs.fade then
+    self.prefs.fade = self.default.fade
+  end
   if not self.prefs.step then
     self.prefs.step = self.default.step
   end
@@ -70,6 +74,12 @@ function Highlighter:SetPreference(key, value)
     return
   end
 
+  if key == "fade" then
+    if value ~= "on" and value ~= "off" then
+      cecho("Unknown value for fade " .. value .. "\n")
+      return
+    end
+  end
   if key == "step" then value = tonumber(value)
   elseif key == "delay" then value = tonumber(value)
   elseif key == "colour" then
@@ -77,6 +87,8 @@ function Highlighter:SetPreference(key, value)
       cecho("Unknown colour " .. value .. "\n")
       return
     end
+  elseif key == "fade" then
+    -- nothing to do
   else
     cecho("Unknown preference " .. key .. "\n")
     return
@@ -128,7 +140,7 @@ function Highlighter:EventHandler(event, ...)
     self:OnConnected(...)
     return
   end
-  if event == "onMapMove" then
+  if event == "onMoveMap" then
     self:OnMoved(...)
     return
   end
@@ -176,24 +188,29 @@ function Highlighter:OnStarted()
 end
 
 function Highlighter:OnMoved(current_room_id)
+  display("Highlighting:OnMoved")
   if not self.highlighting or not next(self.route) then
     return
   end
 
+  display(self.previous_room_id)
   if self.previous_room_id then
     if self.route[self.previous_room_id] then
-      if not self.route[self.previous_room_id].timer then
+      -- if not self.route[self.previous_room_id].timer then
         self:UnhighlightRoom(self.previous_room_id)
-      end
+      -- end
     end
   end
-
+  self.previous_room_id = current_room_id
+--[[
   if current_room_id then
     if not self.route[current_room_id] or (self.route[current_room_id] and not self.route[current_room_id].timer) then
       self:HighlightRoom(current_room_id)
       self.previous_room_id = current_room_id
     end
   end
+
+]]
 end
 
 function Highlighter:OnReset(exception, reason)
@@ -268,14 +285,17 @@ function Highlighter:UnhighlightRoom(room_id)
   if self.route[room_id] and self.route[room_id].timer then
     return
   end
+  if self.prefs.fade == "on" then
+    local r, g, b = table.unpack(self.highlight_colour)
+    highlightRoom(room_id, r, g, b, 0, 0, 0, 1, 125, 0)
 
-  local r, g, b = table.unpack(self.highlight_colour)
-  highlightRoom(room_id, r, g, b, 0, 0, 0, 1, 125, 0)
-
-  self.route[room_id] = {
-    step = 0,
-    timer = tempTimer(0.1, function() self:FadeOutHighlight(room_id) end, true)
-  }
+    self.route[room_id] = {
+      step = 0,
+      timer = tempTimer(0.1, function() self:FadeOutHighlight(room_id) end, true)
+    }
+  else
+    unHighlightRoom(room_id)
+  end
 end
 
 function Highlighter:RemoveHighlights(force)
