@@ -1,0 +1,10 @@
+{
+  "package": "Highlighter",
+  "title": "Highlighter",
+  "description": "Speedwalking highlighter for Mudlet",
+  "version": "1.0.0",
+  "author": "gesslar",
+  "icon": "highlighter.png",
+  "dependencies": "",
+  "outputFile": true
+}
