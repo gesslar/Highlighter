@@ -2,7 +2,7 @@
   "package": "Highlighter",
   "title": "Highlighter",
   "description": "Speedwalking highlighter for Mudlet",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "gesslar",
   "icon": "highlighter.png",
   "dependencies": "",

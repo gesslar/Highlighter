@@ -188,12 +188,10 @@ function Highlighter:OnStarted()
 end
 
 function Highlighter:OnMoved(current_room_id)
-  display("Highlighting:OnMoved")
   if not self.highlighting or not next(self.route) then
     return
   end
 
-  display(self.previous_room_id)
   if self.previous_room_id then
     if self.route[self.previous_room_id] then
       -- if not self.route[self.previous_room_id].timer then
@@ -202,15 +200,6 @@ function Highlighter:OnMoved(current_room_id)
     end
   end
   self.previous_room_id = current_room_id
---[[
-  if current_room_id then
-    if not self.route[current_room_id] or (self.route[current_room_id] and not self.route[current_room_id].timer) then
-      self:HighlightRoom(current_room_id)
-      self.previous_room_id = current_room_id
-    end
-  end
-
-]]
 end
 
 function Highlighter:OnReset(exception, reason)
