@@ -1,4 +1,4 @@
-# Explore
+# Highlighter
 
 Speedwalk path highlighter for Mudlet
 
