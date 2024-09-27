@@ -67,6 +67,11 @@ notification immediately remove all highlights.
 * `exception` - True or false if the reset was due to an exception.
 * `reason` - The reason the speedwalk was reset.
 
+## Support
+
+While there is no official support and this is a hobby project, you are welcome
+to report issues on the [GitHub repo](https://github.com/gesslar/Highlighter).
+
 ## Dependencies
 
 The following packages are required and will be automatically installed if they
