@@ -1,9 +1,24 @@
+-- This is the name of this script, which may be different to the package name
+-- which is why we want to have a specific identifier for events that only
+-- concern this script and not the package as a whole, if it is included
+-- in other packages.
+local script_name = "Highlighter"
+
+---@class Highlighter
+---@field config table
+---@field default table
+---@field prefs table
+---@field route table
+---@field event_handlers table
+---@field highlighting boolean
+---@field highlight_colour nil|table
+---@field previous_room_id nil|number
 Highlighter = {
   config = {
-    name = "Highlighter",
+    name = script_name,
     package_name = "__PKGNAME__",
     package_path = getMudletHomeDir() .. "/__PKGNAME__/",
-    preferences_file = "Highlighter.Preferences.lua",
+    preferences_file = f[[{script_name}.Preferences.lua]],
   },
   default = {
     fade = "on",
@@ -14,8 +29,8 @@ Highlighter = {
   prefs = {},
   route = {},
   event_handlers = {
-    "sysLoadEvent",
     "sysUninstall",
+    "sysLoadEvent",
     "sysConnectionEvent",
     "onMoveMap",
     "onSpeedwalkReset",
@@ -27,19 +42,41 @@ Highlighter = {
   previous_room_id = nil,
 }
 
-table.unpack = table.unpack or unpack
+function Highlighter:Setup(event, package)
+  if package and package ~= self.config.package_name then
+    return
+  end
 
-function Highlighter:Setup(event, ...)
+  if not table.index_of(getPackages(), "Helper") then
+    cecho(f "<gold><b>{self.config.name} is installing dependent <b>Helper</b> package.\n")
+    installPackage(
+      "https://github.com/gesslar/Helper/releases/latest/download/Helper.mpackage"
+    )
+  end
+
   self:LoadPreferences()
+  self:SetupEventHandlers()
+
+  if event == "sysInstall" then
+    tempTimer(1, function()
+      echo("\n")
+      cecho("<" .. self.help_styles.h1 .. ">Welcome to <b>" .. self.config.name .. "</b>!<reset>\n")
+      echo("\n")
+      helper.print({
+        text = self.help.topics.usage,
+        styles = self.help_styles
+      })
+    end)
+  end
 end
 
 function Highlighter:LoadPreferences()
   local path = self.config.package_path .. self.config.preferences_file
   local defaults = self.default
-  local prefs = self.prefs
+  local prefs = self.prefs or {}
 
   if io.exists(path) then
-    local prefs = self.default
+    local defaults = self.default
     table.load(path, prefs)
     prefs = table.update(defaults, prefs)
   end
@@ -106,10 +143,6 @@ end
 -- Event handler for all events
 -- ----------------------------------------------------------------------------
 
--- One time install handler
-
-registerNamedEventHandler(Highlighter.config.name, "Package Installed", "sysInstall", "Highlighter:Setup", true)
-
 function Highlighter:SetupEventHandlers()
   -- Registered event handlers
   local registered_handlers = getNamedEventHandlers(self.config.name) or {}
@@ -125,38 +158,25 @@ function Highlighter:SetupEventHandlers()
   end
 end
 
-Highlighter:SetupEventHandlers()
-
 function Highlighter:EventHandler(event, ...)
-  if event == "sysLoadEvent" then
+  if event == "sysLoadEvent" or event == "sysInstall" or event == "sysConnectionEvent" then
     self:Setup(event, ...)
-    return
-  end
-  if event == "sysUninstall" then
+  elseif event == "sysUninstall" then
     self:Uninstall(event,...)
-    return
-  end
-  if event == "sysConnectionEvent" then
+  elseif event == "sysConnectionEvent" then
     self:OnConnected(...)
-    return
-  end
-  if event == "onMoveMap" then
+  elseif event == "onMoveMap" then
     self:OnMoved(...)
-    return
-  end
-  if event == "onSpeedwalkReset" then
+  elseif event == "onSpeedwalkReset" then
     self:OnReset(...)
-    return
-  end
-  if event == "sysSpeedwalkStarted" then
+  elseif event == "sysSpeedwalkStarted" then
     self:OnStarted()
-    return
-  end
-  if event == "sysSpeedwalkFinished" then
+  elseif event == "sysSpeedwalkFinished" then
     self:OnComplete()
-    return
   end
 end
+
+registerNamedEventHandler(Highlighter.config.name, "Package Installed", "sysInstall", function(...) Highlighter:EventHandler(...) end)
 
 -- ----------------------------------------------------------------------------
 -- Event handlers for specific events
@@ -226,7 +246,8 @@ end
 
 function Highlighter:HighlightRoom(room_id)
   self.highlight_colour = color_table[self.prefs.colour]
-  local r, g, b = table.unpack(self.highlight_colour)
+  ---@diagnostic disable-next-line: deprecated
+  local r, g, b = unpack(self.highlight_colour)
 
   highlightRoom(room_id, r, g, b, 0, 0, 0, 1, 125, 0)
   self.route[room_id] = {}
@@ -256,7 +277,8 @@ function Highlighter:FadeOutHighlight(room_id)
 
   local fade_step = self.route[room_id].step + 1
 
-  local r, g, b = table.unpack(self.highlight_colour)
+  ---@diagnostic disable-next-line: deprecated
+  local r, g, b = unpack(self.highlight_colour)
   local a = 255 - fade_step * self.prefs.step
 
   if a <= 0 then
@@ -275,7 +297,8 @@ function Highlighter:UnhighlightRoom(room_id)
     return
   end
   if self.prefs.fade == "on" then
-    local r, g, b = table.unpack(self.highlight_colour)
+    ---@diagnostic disable-next-line: deprecated
+    local r, g, b = unpack(self.highlight_colour)
     highlightRoom(room_id, r, g, b, 0, 0, 0, 1, 125, 0)
 
     self.route[room_id] = {
@@ -310,3 +333,32 @@ function Highlighter:RemoveHighlights(force)
     self.route = {}
   end
 end
+
+-- ----------------------------------------------------------------------------
+-- Help
+-- ----------------------------------------------------------------------------
+
+Highlighter.help_styles = {
+  h1 = "green_yellow",
+}
+
+Highlighter.help = {
+  name = Highlighter.config.name,
+  topics = {
+    usage = f[[
+<h1><u>{Highlighter.config.name}</u></h1>
+
+Syntax: <b>highlight</b> [<b>command</b>]
+
+  <b>highlight</b> - See this help text.
+  <b>highlight set</b> - See your current preference settings.
+  <b>highlight set</b> <<b>preference</b>> <<b>value</b>> - Set a preference to a value.
+
+  Available preferences:
+    <b>fade</b>     - Set the fade state (<i>on</i> or <i>off</i>, default: <i>{Highlighter.default.fade}</i>).
+    <b>step</b>     - Set the granularity of the fade (default: <i>{Highlighter.default.step}</i>).
+    <b>delay</b>    - Set the speed of the fade (default: <i>{Highlighter.default.delay}</i>).
+    <b>colour</b>   - Set the colour of the highlight (default: <i>{Highlighter.default.colour}</i>).
+]],
+  }
+}
