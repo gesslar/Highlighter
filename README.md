@@ -20,7 +20,7 @@ In Mudlet, type `highlight` to see the help information for this package.
   * `delay` - Set the speed of the fade (default: 0.05)
   * `colour` - Set the colour of the highlight (default: gold)
 
-Note that the colour must be a valid Mudlet colour name.
+Note that the colour must be a valid [Mudlet colour name](https://wiki.mudlet.org/images/c/c3/ShowColors.png).
 
 ## Events
 
@@ -66,6 +66,13 @@ notification immediately remove all highlights.
 
 * `exception` - True or false if the reset was due to an exception.
 * `reason` - The reason the speedwalk was reset.
+
+## Dependencies
+
+The following packages are required and will be automatically installed if they
+are missing:
+
+* [Helper](https://github.com/gesslar/Helper)
 
 ## Credits
 
