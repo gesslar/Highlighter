@@ -1,4 +1,3 @@
-# Ignore build directory and .output file as they are volatile and not required
-# in the repo
 build/
 .output
+.vscode/
