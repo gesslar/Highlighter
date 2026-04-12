@@ -1,0 +1,20 @@
+{
+  "runtime": {
+    "version": "Lua 5.1"
+  },
+  "diagnostics": {
+    "ignoredFiles": "Disable",
+    "globals": [
+      "helper"
+    ]
+  },
+  "workspace": {
+    "library": [
+      "library",
+      "$HOME/.config/Code/User/globalStorage/delwing.mudlet-scripts-sdk/docs"
+    ],
+    "ignoreDir": [
+      "src/resources"
+    ]
+  }
+}

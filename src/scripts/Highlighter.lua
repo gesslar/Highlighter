@@ -202,6 +202,7 @@ function Highlighter:Uninstall(event, package)
 
   self:Reset()
 
+  ---@diagnostic disable-next-line: assign-type-mismatch
   Highlighter = nil
 end
 
