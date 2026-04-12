@@ -10,7 +10,6 @@
   },
   "workspace": {
     "library": [
-      "library",
       "$HOME/.config/Code/User/globalStorage/delwing.mudlet-scripts-sdk/docs"
     ],
     "ignoreDir": [
