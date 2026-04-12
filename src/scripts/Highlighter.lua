@@ -48,6 +48,7 @@ Highlighter = {
   highlight_colour = nil,
   previous_room_id = nil,
   colour_table = nil,
+  glu = require("__PKGNAME__/Glu-single")("__PKGNAME__"),
 }
 
 function Highlighter:Setup(event, package)
@@ -78,41 +79,15 @@ function Highlighter:Setup(event, package)
 end
 
 function Highlighter:LoadPreferences()
-  local path = self.config.package_path .. self.config.preferences_file
-  local defaults = self.default
-  local prefs = self.prefs or {}
-
-  if io.exists(path) then
-    defaults = self.default or {}
-    table.load(path, prefs)
-    prefs = table.update(defaults, prefs) or prefs
-  end
-
-  self.prefs = prefs
-
-  if not self.prefs.rollout then
-    self.prefs.rollout = self.default.rollout
-  end
-  if not self.prefs.fade then
-    self.prefs.fade = self.default.fade
-  end
-  if not self.prefs.step then
-    self.prefs.step = self.default.step
-  end
-  if not self.prefs.delay then
-    self.prefs.delay = self.default.delay
-  end
-  if not self.prefs.colour then
-    self.prefs.colour = self.default.colour
-  end
-  if not self.prefs.alpha then
-    self.prefs.alpha = self.default.alpha
-  end
+  self.prefs = self.glu.preferences.load(
+    self.config.package_name, self.config.preferences_file, self.default
+  )
 end
 
 function Highlighter:SavePreferences()
-  local path = self.config.package_path .. self.config.preferences_file
-  table.save(path, self.prefs)
+  self.glu.preferences.save(
+    self.config.package_name, self.config.preferences_file, self.prefs
+  )
 end
 
 function Highlighter:SetPreference(key, value)
@@ -158,6 +133,7 @@ function Highlighter:SetPreference(key, value)
       cecho("Alpha must be a number between 0 and 255.\n")
       return
     end
+    value = num
   else
     cecho("Unknown preference " .. key .. "\n")
     return
@@ -167,8 +143,6 @@ function Highlighter:SetPreference(key, value)
   self:SavePreferences()
   self:LoadPreferences()
   cecho("Preference " .. key .. " set to " .. value .. ".\n")
-
-  self:SavePreferences()
 end
 
 -- ----------------------------------------------------------------------------
@@ -192,11 +166,12 @@ function Highlighter:SetupEventHandlers()
 end
 
 function Highlighter:EventHandler(event, ...)
-  if event == "sysLoadEvent" or event == "sysInstall" or event == "sysConnectionEvent" then
+  if event == "sysLoadEvent" or event == "sysInstall" then
     self:Setup(event, ...)
   elseif event == "sysUninstall" then
     self:Uninstall(event, ...)
   elseif event == "sysConnectionEvent" then
+    self:Setup(event, ...)
     self:OnConnected(...)
   elseif event == "onMoveMap" then
     self:OnMoved(...)
@@ -337,7 +312,7 @@ function Highlighter:FadeOutHighlight(room_id)
   if a <= 0 then
     unHighlightRoom(room_id)
     killTimer(self.route[room_id].timer)
-    table.remove(self.route, room_id)
+    self.route[room_id] = nil
     return
   end
 
@@ -408,7 +383,7 @@ function Highlighter:RemoveHighlights(force)
       if highlight.timer then
         killTimer(highlight.timer)
       end
-      table.remove(self.route, room_id)
+      self.route[room_id] = nil
     else
       if not highlight.timer then
         self:UnhighlightRoom(room_id)
@@ -425,50 +400,7 @@ end
 ---@param fg table Foreground color as RGB table {r,g,b}
 ---@return table adjusted_color The adjusted foreground color for contrast
 function Highlighter:adjust_foreground(bg, fg)
-  local bg_is_light = self:is_light(bg)
-  local fg_is_light = self:is_light(fg)
-
-  if bg_is_light == fg_is_light then
-    if bg_is_light then
-      fg = self:darken_color(fg, 85)
-    else
-      fg = self:lighten_color(fg, 85)
-    end
-  end
-  return fg
-end
-
----@param color table Color as RGB table {r,g,b}
----@return boolean is_light True if the color is considered light
-function Highlighter:is_light(color)
-  local r = color[1] / 255
-  local g = color[2] / 255
-  local b = color[3] / 255
-  local luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-  return luminance > 0.5
-end
-
----@param color table Color as RGB table {r,g,b}
----@param amount? number Amount to lighten by (default: 30)
----@return table lightened_color The lightened color
-function Highlighter:lighten_color(color, amount)
-  amount = amount or 30
-  return {
-    math.min(color[1] + amount, 255),
-    math.min(color[2] + amount, 255),
-    math.min(color[3] + amount, 255)
-  }
-end
-
----@param color table Color as RGB table {r,g,b}
----@param amount? number Amount to darken by (default: 30)
----@return table darkened_color The darkened color
-function Highlighter:darken_color(color, amount)
-  amount = amount or 30
-  return {
-    math.max(color[1] - amount, 0),
-    math.max(color[2] - amount, 0)
-  }
+  return self.glu.colour.lighten_or_darken(fg, bg, 85)
 end
 
 -- ----------------------------------------------------------------------------
