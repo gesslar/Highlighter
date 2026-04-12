@@ -77,7 +77,3 @@ are missing:
 ## License
 
 `highlighter` is released under the [0BSD](LICENSE.txt).
-
-## Credits
-
-[Marker icons created by mavadee - Flaticon](https://www.flaticon.com/free-icons/marker)
