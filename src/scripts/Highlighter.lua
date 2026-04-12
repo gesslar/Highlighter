@@ -11,7 +11,7 @@ local script_name = "Highlighter"
 ---@field route table Current route highlighting state
 ---@field route_fade_in table Route fade in effects
 ---@field route_fade_out table Route fade out effects
----@field event_handlers table[] List of event handlers to register
+---@field event_handlers string[] List of event handlers to register
 ---@field highlighting boolean Whether highlighting is currently active
 ---@field highlight_colour table|nil Current highlight color
 ---@field previous_room_id number|nil ID of the previously highlighted room
@@ -21,7 +21,7 @@ Highlighter = {
     name = script_name,
     package_name = "__PKGNAME__",
     package_path = getMudletHomeDir() .. "/__PKGNAME__/",
-    preferences_file = f[[{script_name}.Preferences.lua]],
+    preferences_file = f [[{script_name}.Preferences.lua]],
   },
   default = {
     fade = "off",
@@ -83,9 +83,9 @@ function Highlighter:LoadPreferences()
   local prefs = self.prefs or {}
 
   if io.exists(path) then
-    local defaults = self.default
+    defaults = self.default or {}
     table.load(path, prefs)
-    prefs = table.update(defaults, prefs)
+    prefs = table.update(defaults, prefs) or prefs
   end
 
   self.prefs = prefs
@@ -139,8 +139,10 @@ function Highlighter:SetPreference(key, value)
     end
   end
 
-  if key == "step" then value = tonumber(value)
-  elseif key == "delay" then value = tonumber(value)
+  if key == "step" then
+    value = tonumber(value)
+  elseif key == "delay" then
+    value = tonumber(value)
   elseif key == "colour" then
     if not color_table[value] then
       cecho("Unknown colour " .. value .. "\n")
@@ -180,7 +182,8 @@ function Highlighter:SetupEventHandlers()
   for _, event in ipairs(self.event_handlers) do
     local handler = self.config.name .. "." .. event
     if not registered_handlers[handler] then
-      local result, err = registerNamedEventHandler(self.config.name, handler, event, function(...) self:EventHandler(...) end)
+      local result, err = registerNamedEventHandler(self.config.name, handler, event,
+        function(...) self:EventHandler(...) end)
       if not result then
         cecho("<orange_red>Failed to register event handler for " .. event .. "\n")
       end
@@ -192,7 +195,7 @@ function Highlighter:EventHandler(event, ...)
   if event == "sysLoadEvent" or event == "sysInstall" or event == "sysConnectionEvent" then
     self:Setup(event, ...)
   elseif event == "sysUninstall" then
-    self:Uninstall(event,...)
+    self:Uninstall(event, ...)
   elseif event == "sysConnectionEvent" then
     self:OnConnected(...)
   elseif event == "onMoveMap" then
@@ -206,7 +209,8 @@ function Highlighter:EventHandler(event, ...)
   end
 end
 
-registerNamedEventHandler(Highlighter.config.name, "Package Installed", "sysInstall", function(...) Highlighter:EventHandler(...) end)
+registerNamedEventHandler(Highlighter.config.name, "Package Installed", "sysInstall",
+  function(...) Highlighter:EventHandler(...) end)
 Highlighter:SetupEventHandlers()
 
 -- ----------------------------------------------------------------------------
@@ -249,7 +253,7 @@ function Highlighter:OnMoved(current_room_id)
   if self.previous_room_id then
     if self.route[self.previous_room_id] then
       -- if not self.route[self.previous_room_id].timer then
-        self:UnhighlightRoom(self.previous_room_id)
+      self:UnhighlightRoom(self.previous_room_id)
       -- end
     end
   end
@@ -279,8 +283,14 @@ function Highlighter:Reset(force)
 end
 
 function Highlighter:HighlightRoom(room_id)
-  local fg, bg = self:DetermineColours(room_id)
+  local fg, _ = self:DetermineColours(room_id)
   local alpha = self.prefs.alpha
+
+  -- In case of nil just make sure we got something.
+  fg = fg and fg or {}
+  fg[1] = fg[1] and fg[1] or 0
+  fg[2] = fg[2] and fg[2] or 0
+  fg[3] = fg[3] and fg[3] or 0
 
   highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, alpha, 0)
   self.route[room_id] = {}
@@ -296,11 +306,14 @@ function Highlighter:HighlightRoute(start_room_id)
   ---@diagnostic disable-next-line: param-type-mismatch
   for i, dir in ipairs(speedWalkDir) do
     local room_id = tonumber(speedWalkPath[i])
+
+    assert(room_id ~= nil, "`room_id` is nil")
+
     if self.prefs.rollout == "on" then
       self.route[room_id] = {
         step = 0,
         direction = "in",
-        timer = tempTimer((i-1)*(self.prefs.delay * 0.75), function() self:HighlightRoom(room_id) end, false)
+        timer = tempTimer((i - 1) * (self.prefs.delay * 0.75), function() self:HighlightRoom(room_id) end, false)
       }
     else
       self:HighlightRoom(room_id)
@@ -469,7 +482,7 @@ Highlighter.help_styles = {
 Highlighter.help = {
   name = Highlighter.config.name,
   topics = {
-    usage = f[[
+    usage = f [[
 <h1><u>{Highlighter.config.name}</u></h1>
 
 Syntax: <b>highlight</b> [<b>command</b>]

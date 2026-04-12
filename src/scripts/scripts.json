@@ -1,8 +1,8 @@
 [
   {
+    "name": "Highlighter",
     "isActive": "yes",
     "isFolder": "no",
-    "name": "Highlighter",
     "script": ""
   }
 ]

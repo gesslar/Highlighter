@@ -1,6 +1,6 @@
 [
-    {
-        "name" : "Highlighter",
-        "regex" : "^highlight(.*)$"
-    }
+  {
+    "name": "Highlighter",
+    "regex": "^highlight(.*)$"
+  }
 ]
