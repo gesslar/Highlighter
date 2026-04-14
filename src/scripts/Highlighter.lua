@@ -115,9 +115,19 @@ function Highlighter:SetPreference(key, value)
   end
 
   if key == "step" then
-    value = tonumber(value)
+    local num = tonumber(value)
+    if not num or num <= 0 then
+      cecho("Step must be a positive number.\n")
+      return
+    end
+    value = num
   elseif key == "delay" then
-    value = tonumber(value)
+    local num = tonumber(value)
+    if not num or num < 0 then
+      cecho("Delay must be a non-negative number.\n")
+      return
+    end
+    value = num
   elseif key == "colour" then
     if not color_table[value] then
       cecho("Unknown colour " .. value .. "\n")
