@@ -5,12 +5,21 @@
 -- Glu cannot use Glass because the constructors will be different. The
 -- factory is for modules and any other classes in Glu.
 
-if not _G["Glu"] then
+local Glu
   Glu = {}
   Glu.__index = Glu
   table.unpack = table.unpack or unpack
 
   local registeredGlasses = {}
+
+  local function unregisterGlass(name)
+    for i, glass in ipairs(registeredGlasses) do
+      if glass.name == name then
+        table.remove(registeredGlasses, i)
+        return
+      end
+    end
+  end
 
   function Glu.get_glasses() return registeredGlasses end
 
@@ -101,9 +110,11 @@ if not _G["Glu"] then
 
         if not parent then
           local parent_class = Glu.get_glass(parent_name)
+          if not parent_class then
+            error("Parent class `" .. parent_name .. "` not found for `" .. glu_class.name .. "`")
+          end
           -- Recursively instantiate the parent class
           instantiate(glu, parent_class, ops, into)
-          -- error("Parent class `" .. glu_class.extends .. "` not found for `" .. glu_class.name .. "`")
         end
       end
 
@@ -292,6 +303,24 @@ if not _G["Glu"] then
     -- Let's now create them!
     for _, class in ipairs(registeredGlasses) do
       new_object(instance, class, {}, instance)
+    end
+
+    --- Register a glass on this instance after construction.
+    --- Delegates to Glu.glass.register and then instantiates the
+    --- glass on this instance so it is immediately available.
+    --- @param class_opts table Glass registration options (same as Glu.glass.register)
+    --- @return table The registered glass class
+    function instance.register(class_opts)
+      local is_new = not Glu.has_glass(class_opts.name)
+      local glass = Glu.glass.register(class_opts)
+      local ok, err = pcall(new_object, instance, glass, {}, instance)
+      if not ok then
+        if is_new then
+          unregisterGlass(class_opts.name)
+        end
+        error(err)
+      end
+      return glass
     end
 
     -- Trap events for uninstalling the package and clean ourselves up.
@@ -590,8 +619,6 @@ if not _G["Glu"] then
   }
   Void.__index = Void
   Glu.void = Void
-end
-
 
 -- File: glass_loader.lua
 local GlassLoaderClass = Glu.glass.register({
@@ -3036,13 +3063,16 @@ local PreferencesClass = Glu.glass.register({
 
       local path = getMudletHomeDir() .. "/" .. (pkg and pkg .. "/" or "") .. file
 
+      -- Always merge onto a copy of the defaults so the caller's defaults table
+      -- is never mutated. Mutating it aliases the returned prefs to the caller's
+      -- defaults, which silently corrupts any later "fall back to defaults" logic.
       if not io.exists(path) then
-        return defaults
+        return table.deepcopy(defaults)
       end
 
       local prefs = {}
       table.load(path, prefs)
-      prefs = table.update(defaults, prefs)
+      prefs = table.update(table.deepcopy(defaults), prefs)
 
       return prefs or defaults
     end

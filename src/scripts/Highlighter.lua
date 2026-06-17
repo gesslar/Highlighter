@@ -13,7 +13,6 @@ local script_name = "Highlighter"
 ---@field route_fade_out table Route fade out effects
 ---@field event_handlers string[] List of event handlers to register
 ---@field highlighting boolean Whether highlighting is currently active
----@field highlight_colour table|nil Current highlight color
 ---@field previous_room_id number|nil ID of the previously highlighted room
 ---@field colour_table table|nil Table of environment colors
 Highlighter = {
@@ -45,7 +44,6 @@ Highlighter = {
     "sysSpeedwalkFinished",
   },
   highlighting = false,
-  highlight_colour = nil,
   previous_room_id = nil,
   colour_table = nil,
   glu = require("__PKGNAME__/Glu-single")("__PKGNAME__"),
@@ -79,14 +77,16 @@ function Highlighter:Setup(event, package)
 end
 
 function Highlighter:LoadPreferences()
+  -- Store prefs at the profile root (nil package) rather than inside the
+  -- package directory, which Mudlet wipes on package reinstall/upgrade.
   self.prefs = self.glu.preferences.load(
-    self.config.package_name, self.config.preferences_file, self.default
+    nil, self.config.preferences_file, self.default
   )
 end
 
 function Highlighter:SavePreferences()
   self.glu.preferences.save(
-    self.config.package_name, self.config.preferences_file, self.prefs
+    nil, self.config.preferences_file, self.prefs
   )
 end
 
@@ -129,7 +129,7 @@ function Highlighter:SetPreference(key, value)
     end
     value = num
   elseif key == "colour" then
-    if not color_table[value] then
+    if value ~= "auto" and not color_table[value] then
       cecho("Unknown colour " .. value .. "\n")
       return
     end
@@ -166,7 +166,7 @@ function Highlighter:SetupEventHandlers()
   for _, event in ipairs(self.event_handlers) do
     local handler = self.config.name .. "." .. event
     if not registered_handlers[handler] then
-      local result, err = registerNamedEventHandler(self.config.name, handler, event,
+      local result, _ = registerNamedEventHandler(self.config.name, handler, event,
         function(...) self:EventHandler(...) end)
       if not result then
         cecho("<orange_red>Failed to register event handler for " .. event .. "\n")
@@ -182,7 +182,7 @@ function Highlighter:EventHandler(event, ...)
     self:Uninstall(event, ...)
   elseif event == "sysConnectionEvent" then
     self:Setup(event, ...)
-    self:OnConnected(...)
+    self:OnConnected()
   elseif event == "onMoveMap" then
     self:OnMoved(...)
   elseif event == "onSpeedwalkReset" then
@@ -194,15 +194,20 @@ function Highlighter:EventHandler(event, ...)
   end
 end
 
-registerNamedEventHandler(Highlighter.config.name, "Package Installed", "sysInstall",
-  function(...) Highlighter:EventHandler(...) end)
+registerNamedEventHandler(
+  Highlighter.config.name,
+  "Package Installed",
+  "sysInstall",
+  function(...) Highlighter:EventHandler(...) end
+)
+
 Highlighter:SetupEventHandlers()
 
 -- ----------------------------------------------------------------------------
 -- Event handlers for specific events
 -- ----------------------------------------------------------------------------
 
-function Highlighter:Uninstall(event, package)
+function Highlighter:Uninstall(_, package)
   if package ~= self.config.package_name then
     return
   end
@@ -216,7 +221,7 @@ function Highlighter:Uninstall(event, package)
   Highlighter = nil
 end
 
-function Highlighter:OnConnected(...)
+function Highlighter:OnConnected()
   self.route = {}
   self.route_fade_in = {}
   self.route_fade_out = {}
@@ -224,11 +229,17 @@ end
 
 function Highlighter:OnStarted()
   local room_id = getPlayerRoom()
-  self.colour_table = getCustomEnvColorTable() or {}
+
+  -- getCustomEnvColorTable() returns {r, g, b, a} (Mudlet appends alpha),
+  -- but Glu's colour functions require exactly {r, g, b}. Strip the alpha.
+  self.colour_table = {}
+  for env, rgb in pairs(getCustomEnvColorTable() or {}) do
+    self.colour_table[env] = {rgb[1], rgb[2], rgb[3]}
+  end
 
   self.previous_room_id = room_id
   self.highlighting = true
-  self:HighlightRoute(room_id)
+  self:HighlightRoute()
 end
 
 function Highlighter:OnMoved(current_room_id)
@@ -246,7 +257,7 @@ function Highlighter:OnMoved(current_room_id)
   self.previous_room_id = current_room_id
 end
 
-function Highlighter:OnReset(exception, reason)
+function Highlighter:OnReset(exception)
   self.highlighting = false
   self:Reset(exception)
 end
@@ -282,15 +293,13 @@ function Highlighter:HighlightRoom(room_id)
   self.route[room_id] = {}
 end
 
-function Highlighter:HighlightRoute(start_room_id)
+function Highlighter:HighlightRoute()
   if next(self.route) then
     self:RemoveHighlights(true)
   end
 
-  self.highlight_colour = color_table[self.prefs.colour]
-
   ---@diagnostic disable-next-line: param-type-mismatch
-  for i, dir in ipairs(speedWalkDir) do
+  for i, _ in ipairs(speedWalkDir) do
     local room_id = tonumber(speedWalkPath[i])
 
     assert(room_id ~= nil, "`room_id` is nil")
@@ -327,7 +336,7 @@ function Highlighter:FadeOutHighlight(room_id)
     return
   end
 
-  local fg, bg = self:DetermineColours(room_id)
+  local fg, _ = self:DetermineColours(room_id)
   highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, a, 0)
 
   self.route[room_id].step = fade_step
@@ -351,7 +360,7 @@ function Highlighter:UnhighlightRoom(room_id)
     end
   end
 
-  local fg, bg = self:DetermineColours(room_id)
+  local fg, _ = self:DetermineColours(room_id)
   highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, 125, 0)
 
   self.route[room_id] = {
@@ -439,7 +448,8 @@ Syntax: <b>highlight</b> [<b>command</b>]
     <b>rollout</b>  - Set the rollout state (<i>on</i> or <i>off</i>, default: <i>{Highlighter.default.rollout}</i>).
     <b>step</b>     - Set the granularity of the fade (default: <i>{Highlighter.default.step}</i>).
     <b>delay</b>    - Set the speed of the fade (default: <i>{Highlighter.default.delay}</i>).
-    <b>colour</b>   - Set the colour of the highlight (default: <i>{Highlighter.default.colour}</i>).
+    <b>colour</b>   - Set the colour of the highlight (<i>auto</i> or a named colour, default: <i>{Highlighter.default.colour}</i>).
+    <b>alpha</b>    - Set the opacity of the highlight (<i>0</i>-<i>255</i>, default: <i>{Highlighter.default.alpha}</i>).
 ]],
   }
 }
