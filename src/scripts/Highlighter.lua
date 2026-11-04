@@ -5,6 +5,10 @@
 local script_name = "Highlighter"
 local glu_module = "__PKGNAME__/vendor/Glu-single"
 
+-- Running this script again replaces the table below, and with it the only record
+-- of what's on the map and which timers are running.
+if Highlighter then Highlighter:Reset(true) end
+
 ---@class Highlighter
 ---@field config table Configuration settings for the highlighter
 ---@field default table Default preference values
