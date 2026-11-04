@@ -46,46 +46,61 @@ Highlighter = {
   highlighting = false,
   previous_room_id = nil,
   colour_table = nil,
-  glu = require("__PKGNAME__/Glu-single")("__PKGNAME__"),
+  glu = require("__PKGNAME__/vendor/Glu-single")("__PKGNAME__"),
 }
+
+local glu = Highlighter.glu
 
 function Highlighter:Setup(event, package)
   if package and package ~= self.config.package_name then
     return
   end
 
-  if not table.index_of(getPackages(), "Helper") then
-    cecho(f "<gold><b>{self.config.name} is installing dependent <b>Helper</b> package.\n")
-    installPackage(
-      "https://github.com/gesslar/Helper/releases/latest/download/Helper.mpackage"
-    )
+  -- Returns nil when every dependency is already installed.
+  local dependencies = glu.dependency_queue.new_dependency_queue(
+    {
+      {
+        name = "Helper",
+        url = "https://github.com/gesslar/Helper/releases/latest/download/Helper.mpackage",
+      },
+    },
+    function(ok, message)
+      if not ok then
+        cecho("<orange_red>" .. message .. "<reset>")
+        return
+      end
+
+      if event == "sysInstall" then
+        glu.func.delay(function()
+          echo("\n")
+          cecho("<" .. self.help_styles.h1 .. ">Welcome to <b>" .. self.config.name .. "</b>!<reset>\n")
+          echo("\n")
+          helper.print({
+            text = self.help.topics.usage,
+            styles = self.help_styles
+          })
+        end, 1)
+      end
+    end
+  )
+
+  if dependencies then
+    dependencies.start()
   end
 
   self:LoadPreferences()
-
-  if event == "sysInstall" then
-    tempTimer(1, function()
-      echo("\n")
-      cecho("<" .. self.help_styles.h1 .. ">Welcome to <b>" .. self.config.name .. "</b>!<reset>\n")
-      echo("\n")
-      helper.print({
-        text = self.help.topics.usage,
-        styles = self.help_styles
-      })
-    end)
-  end
 end
 
 function Highlighter:LoadPreferences()
   -- Store prefs at the profile root (nil package) rather than inside the
   -- package directory, which Mudlet wipes on package reinstall/upgrade.
-  self.prefs = self.glu.preferences.load(
+  self.prefs = glu.preferences.load(
     nil, self.config.preferences_file, self.default
   )
 end
 
 function Highlighter:SavePreferences()
-  self.glu.preferences.save(
+  glu.preferences.save(
     nil, self.config.preferences_file, self.prefs
   )
 end
@@ -116,7 +131,7 @@ function Highlighter:SetPreference(key, value)
 
   if key == "step" then
     local num = tonumber(value)
-    if not num or num <= 0 then
+    if not num or not glu.number.positive(num) then
       cecho("Step must be a positive number.\n")
       return
     end
@@ -139,7 +154,7 @@ function Highlighter:SetPreference(key, value)
     -- nothing to do
   elseif key == "alpha" then
     local num = tonumber(value)
-    if not num or num < 0 or num > 255 then
+    if not num or not glu.number.is_between(num, 0, 255) then
       cecho("Alpha must be a number between 0 and 255.\n")
       return
     end
@@ -232,10 +247,9 @@ function Highlighter:OnStarted()
 
   -- getCustomEnvColorTable() returns {r, g, b, a} (Mudlet appends alpha),
   -- but Glu's colour functions require exactly {r, g, b}. Strip the alpha.
-  self.colour_table = {}
-  for env, rgb in pairs(getCustomEnvColorTable() or {}) do
-    self.colour_table[env] = {rgb[1], rgb[2], rgb[3]}
-  end
+  self.colour_table = glu.table.map(getCustomEnvColorTable() or {}, function(_, rgb)
+    return glu.table.slice(rgb, 1, 3)
+  end)
 
   self.previous_room_id = room_id
   self.highlighting = true
@@ -308,7 +322,7 @@ function Highlighter:HighlightRoute()
       self.route[room_id] = {
         step = 0,
         direction = "in",
-        timer = tempTimer((i - 1) * (self.prefs.delay * 0.75), function() self:HighlightRoom(room_id) end, false)
+        timer = glu.func.delay(function() self:HighlightRoom(room_id) end, (i - 1) * (self.prefs.delay * 0.75))
       }
     else
       self:HighlightRoom(room_id)
@@ -420,7 +434,7 @@ end
 ---@param fg table Foreground color as RGB table {r,g,b}
 ---@return table adjusted_color The adjusted foreground color for contrast
 function Highlighter:adjust_foreground(bg, fg)
-  return self.glu.colour.lighten_or_darken(fg, bg, 85)
+  return glu.colour.lighten_or_darken(fg, bg, 85)
 end
 
 -- ----------------------------------------------------------------------------

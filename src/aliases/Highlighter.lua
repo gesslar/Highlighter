@@ -1,4 +1,4 @@
-local input = matches[2]:trim()
+local input = Highlighter.glu.string.trim(matches[2])
 local command, subcommand, value = input:match("^(%S+)%s*(%S*)%s*(.*)$")
 
 if command == "set" then
