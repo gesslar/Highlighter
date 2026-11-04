@@ -97,8 +97,8 @@ are missing:
   [mudlet-busted](https://hub.docker.com/r/gesslardev/mudlet-busted) image
 * `npm run test:tree` - Run the specs with nested describe/it output
 * `npm run docker:update` - Pull the latest mudlet-busted image
-* `npm run update-glu` - Update the bundled copy of
-  [Glu](https://github.com/gesslar/Glu)
+* `npm run glu` - Install the latest [Glu](https://github.com/gesslar/Glu) and
+  copy it over the bundled one
 
 Pull requests to `main` run the specs through the Quality workflow. Merging one
 publishes a release once Quality has passed.
