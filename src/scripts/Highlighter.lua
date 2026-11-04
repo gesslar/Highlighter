@@ -39,6 +39,7 @@ Highlighter = {
     "onSpeedwalkReset",
     "sysSpeedwalkStarted",
     "sysSpeedwalkFinished",
+    "sysSpeedwalkStopped",
   },
   highlighting = false,
   previous_room_id = nil,
@@ -186,7 +187,7 @@ function Highlighter:EventHandler(event, ...)
     self:OnConnected()
   elseif event == "onMoveMap" then
     self:OnMoved(...)
-  elseif event == "onSpeedwalkReset" then
+  elseif event == "onSpeedwalkReset" or event == "sysSpeedwalkStopped" then
     self:OnReset()
   elseif event == "sysSpeedwalkStarted" then
     self:OnStarted()
@@ -224,6 +225,8 @@ function Highlighter:Uninstall(_, package_name)
   -- Mudlet keeps this cached after an uninstall, so upgrading in the same
   -- session would otherwise run the new script against the old Glu.
   package.loaded[glu_module] = nil
+
+  cecho("<" .. self.help_styles.h1 .. ">[" .. self.config.name .. "]<reset> You have uninstalled " .. self.config.name .. ".\n")
 
   ---@diagnostic disable-next-line: assign-type-mismatch
   Highlighter = nil
@@ -299,7 +302,7 @@ function Highlighter:HighlightRoute()
   -- speedwalk() raises sysSpeedwalkStarted without needing one.
   ---@diagnostic disable-next-line: param-type-mismatch
   for i, room in ipairs(speedWalkPath or {}) do
-    local room_id = tonumber(room)
+    local room_id = tonumber(room) --[[@as number]]
 
     if self.prefs.rollout == "on" then
       self.route[room_id] = {
@@ -322,7 +325,7 @@ function Highlighter:FadeOutHighlight(room_id)
 
   local fade_step = highlight.step + 1
 
-  local a = self.prefs.alpha - fade_step * self.prefs.step
+  local a = highlight.alpha - fade_step * self.prefs.step
 
   if a <= 0 then
     unHighlightRoom(room_id)
@@ -346,28 +349,34 @@ function Highlighter:UnhighlightRoom(room_id)
     return
   end
 
-  -- Still waiting to roll out, so it isn't on the map yet and there's nothing
-  -- to take off. Left alone, its timer would draw it after we've moved on.
-  if highlight.direction == "in" then
-    if highlight.timer then
-      killTimer(highlight.timer)
-    end
-    self.route[room_id] = nil
-    return
+  -- Still waiting to roll out, so it isn't on the map yet. Left alone, its timer
+  -- would draw it after we've moved on.
+  local waiting = highlight.direction == "in"
+
+  if waiting and highlight.timer then
+    killTimer(highlight.timer)
   end
 
   if self.prefs.fade == "off" then
-    unHighlightRoom(room_id)
+    if not waiting then
+      unHighlightRoom(room_id)
+    end
     self.route[room_id] = nil
     return
   end
 
   local fg, _ = self:DetermineColours(room_id)
 
+  -- Drop to half straight away, which is what leaves a trail behind the player,
+  -- and fade out from there.
+  local alpha = math.floor(self.prefs.alpha / 2)
+  highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, alpha, 0)
+
   self.route[room_id] = {
     step = 0,
     direction = "out",
     fg = fg,
+    alpha = alpha,
     timer = tempTimer(self.prefs.delay, function() self:FadeOutHighlight(room_id) end, true)
   }
 end

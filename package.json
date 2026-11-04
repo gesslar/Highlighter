@@ -7,6 +7,9 @@
   "scripts": {
     "build": "npx -y @gesslar/muddy",
     "watch": "npx -y @gesslar/muddy -w",
+    "test": "docker run --rm -v \"$PWD\":/workspace gesslardev/mudlet-busted",
+    "test:tree": "docker run --rm -e BUSTED_OUTPUT=treeOutput -v \"$PWD\":/workspace gesslardev/mudlet-busted",
+    "docker:update": "docker pull gesslardev/mudlet-busted",
     "major": "npx -y @gesslar/muddy version major --package && npm i",
     "minor": "npx -y @gesslar/muddy version minor --package && npm i",
     "patch": "npx -y @gesslar/muddy version patch --package && npm i",

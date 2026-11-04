@@ -20,7 +20,8 @@ In Mudlet, type `highlight` to see the help information for this package.
   * `rollout` - Enable or disable the rollout effect (`on` or `off`, default: on)
   * `step` - Set the granularity of the fade (default: 10)
   * `delay` - Set the speed of the fade (default: 0.025)
-  * `colour` - Set the colour of the highlight (`auto` or a named colour, default: auto)
+  * `colour` - Set the colour of the highlight (`auto` or a named colour,
+    default: auto)
   * `alpha` - Set the opacity of the highlight (0-255, default: 255)
 
 Note that the colour must be a valid [Mudlet colour name](https://wiki.mudlet.org/images/c/c3/ShowColors.png).
@@ -59,6 +60,16 @@ notification to know when to fade all of the remaining highlights.
 
 * `none` - No arguments are required.
 
+### `sysSpeedwalkStopped`
+
+Trigger this event when the speedwalk has been stopped. Highlighter will use this
+notification to immediately remove all highlights.
+
+#### Arguments
+
+* `none` - No arguments are required. Mappers may send `exception` and `reason`,
+  but neither changes what Highlighter does.
+
 ### `onSpeedwalkReset`
 
 Trigger this event when the speedwalk has been reset. Highlighter will use this
@@ -75,6 +86,22 @@ The following packages are required and will be automatically installed if they
 are missing:
 
 * [Helper](https://github.com/gesslar/Helper)
+
+## Development
+
+* `npm run build` - Build the package with
+  [muddy](https://www.npmjs.com/package/@gesslar/muddy)
+* `npm run watch` - Rebuild the package when files change
+* `npm test` - Run the specs in `src/resources/test/` inside a headless Mudlet.
+  This needs Docker, and uses the
+  [mudlet-busted](https://hub.docker.com/r/gesslardev/mudlet-busted) image
+* `npm run test:tree` - Run the specs with nested describe/it output
+* `npm run docker:update` - Pull the latest mudlet-busted image
+* `npm run update-glu` - Update the bundled copy of
+  [Glu](https://github.com/gesslar/Glu)
+
+Pull requests to `main` run the specs through the Quality workflow. Merging one
+publishes a release once Quality has passed.
 
 ## License
 
