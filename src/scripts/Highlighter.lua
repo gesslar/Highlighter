@@ -3,23 +3,22 @@
 -- concern this script and not the package as a whole, if it is included
 -- in other packages.
 local script_name = "Highlighter"
+local glu_module = "__PKGNAME__/vendor/Glu-single"
 
 ---@class Highlighter
 ---@field config table Configuration settings for the highlighter
 ---@field default table Default preference values
 ---@field prefs table Current user preferences
 ---@field route table Current route highlighting state
----@field route_fade_in table Route fade in effects
----@field route_fade_out table Route fade out effects
 ---@field event_handlers string[] List of event handlers to register
 ---@field highlighting boolean Whether highlighting is currently active
 ---@field previous_room_id number|nil ID of the previously highlighted room
 ---@field colour_table table|nil Table of environment colors
+---@field dependencies table|nil The dependency queue, while one is running
 Highlighter = {
   config = {
     name = script_name,
     package_name = "__PKGNAME__",
-    package_path = getMudletHomeDir() .. "/__PKGNAME__/",
     preferences_file = f [[{script_name}.Preferences.lua]],
   },
   default = {
@@ -32,8 +31,6 @@ Highlighter = {
   },
   prefs = {},
   route = {},
-  route_fade_in = {},
-  route_fade_out = {},
   event_handlers = {
     "sysUninstall",
     "sysLoadEvent",
@@ -46,7 +43,7 @@ Highlighter = {
   highlighting = false,
   previous_room_id = nil,
   colour_table = nil,
-  glu = require("__PKGNAME__/vendor/Glu-single")("__PKGNAME__"),
+  glu = require(glu_module)("__PKGNAME__"),
 }
 
 local glu = Highlighter.glu
@@ -56,8 +53,17 @@ function Highlighter:Setup(event, package)
     return
   end
 
+  self:LoadPreferences()
+
+  -- sysLoadEvent can arrive while a download is under way. A second queue would
+  -- install the same package again, which Mudlet refuses, and the queue would
+  -- report that as a failure.
+  if self.dependencies then
+    return
+  end
+
   -- Returns nil when every dependency is already installed.
-  local dependencies = glu.dependency_queue.new_dependency_queue(
+  self.dependencies = glu.dependency_queue.new_dependency_queue(
     {
       {
         name = "Helper",
@@ -65,6 +71,8 @@ function Highlighter:Setup(event, package)
       },
     },
     function(ok, message)
+      self.dependencies = nil
+
       if not ok then
         cecho("<orange_red>" .. message .. "<reset>")
         return
@@ -84,11 +92,9 @@ function Highlighter:Setup(event, package)
     end
   )
 
-  if dependencies then
-    dependencies.start()
+  if self.dependencies then
+    self.dependencies.start()
   end
-
-  self:LoadPreferences()
 end
 
 function Highlighter:LoadPreferences()
@@ -106,30 +112,17 @@ function Highlighter:SavePreferences()
 end
 
 function Highlighter:SetPreference(key, value)
-  if not self.prefs then
-    self.prefs = {}
-  end
-
   if not self.default[key] then
     cecho("Unknown preference " .. key .. "\n")
     return
   end
 
-  if key == "fade" then
+  if key == "fade" or key == "rollout" then
     if value ~= "on" and value ~= "off" then
-      cecho("Unknown value for fade " .. value .. "\n")
+      cecho("Unknown value for " .. key .. " " .. value .. "\n")
       return
     end
-  end
-
-  if key == "rollout" then
-    if value ~= "on" and value ~= "off" then
-      cecho("Unknown value for rollout " .. value .. "\n")
-      return
-    end
-  end
-
-  if key == "step" then
+  elseif key == "step" then
     local num = tonumber(value)
     if not num or not glu.number.positive(num) then
       cecho("Step must be a positive number.\n")
@@ -138,20 +131,20 @@ function Highlighter:SetPreference(key, value)
     value = num
   elseif key == "delay" then
     local num = tonumber(value)
-    if not num or num < 0 then
-      cecho("Delay must be a non-negative number.\n")
+    -- tempTimer raises an error for anything outside this range. tonumber also
+    -- accepts "nan" and "inf", which is_between turns away.
+    if not num or not glu.number.is_between(num, 0, 86399) then
+      cecho("Delay must be a number between 0 and 86399.\n")
       return
     end
     value = num
   elseif key == "colour" then
-    if value ~= "auto" and not color_table[value] then
+    -- color_table also holds "transparent", which has a fourth element that
+    -- Glu's colour functions refuse.
+    if value ~= "auto" and (not color_table[value] or #color_table[value] ~= 3) then
       cecho("Unknown colour " .. value .. "\n")
       return
     end
-  elseif key == "fade" then
-    -- nothing to do
-  elseif key == "rollout" then
-    -- nothing to do
   elseif key == "alpha" then
     local num = tonumber(value)
     if not num or not glu.number.is_between(num, 0, 255) then
@@ -159,14 +152,10 @@ function Highlighter:SetPreference(key, value)
       return
     end
     value = num
-  else
-    cecho("Unknown preference " .. key .. "\n")
-    return
   end
 
   self.prefs[key] = value
   self:SavePreferences()
-  self:LoadPreferences()
   cecho("Preference " .. key .. " set to " .. value .. ".\n")
 end
 
@@ -175,17 +164,15 @@ end
 -- ----------------------------------------------------------------------------
 
 function Highlighter:SetupEventHandlers()
-  -- Registered event handlers
-  local registered_handlers = getNamedEventHandlers(self.config.name) or {}
-  -- Register persistent event handlers
+  -- Register persistent event handlers. Registering a name again replaces its
+  -- handler, which is what a re-run of this script needs: the old one is still
+  -- bound to the old Highlighter table.
   for _, event in ipairs(self.event_handlers) do
     local handler = self.config.name .. "." .. event
-    if not registered_handlers[handler] then
-      local result, _ = registerNamedEventHandler(self.config.name, handler, event,
-        function(...) self:EventHandler(...) end)
-      if not result then
-        cecho("<orange_red>Failed to register event handler for " .. event .. "\n")
-      end
+    local result, _ = registerNamedEventHandler(self.config.name, handler, event,
+      function(...) self:EventHandler(...) end)
+    if not result then
+      cecho("<orange_red>Failed to register event handler for " .. event .. "\n")
     end
   end
 end
@@ -196,12 +183,11 @@ function Highlighter:EventHandler(event, ...)
   elseif event == "sysUninstall" then
     self:Uninstall(event, ...)
   elseif event == "sysConnectionEvent" then
-    self:Setup(event, ...)
     self:OnConnected()
   elseif event == "onMoveMap" then
     self:OnMoved(...)
   elseif event == "onSpeedwalkReset" then
-    self:OnReset(...)
+    self:OnReset()
   elseif event == "sysSpeedwalkStarted" then
     self:OnStarted()
   elseif event == "sysSpeedwalkFinished" then
@@ -218,28 +204,33 @@ registerNamedEventHandler(
 
 Highlighter:SetupEventHandlers()
 
+-- No event brings the preferences in when this script is run again by hand.
+Highlighter:LoadPreferences()
+
 -- ----------------------------------------------------------------------------
 -- Event handlers for specific events
 -- ----------------------------------------------------------------------------
 
-function Highlighter:Uninstall(_, package)
-  if package ~= self.config.package_name then
+function Highlighter:Uninstall(_, package_name)
+  if package_name ~= self.config.package_name then
     return
   end
 
   deleteAllNamedEventHandlers(self.config.name)
-  deleteAllNamedTimers(self.config.name)
 
-  self:Reset()
+  -- Forced, as nothing would be left to clear the map or stop a timer later.
+  self:Reset(true)
+
+  -- Mudlet keeps this cached after an uninstall, so upgrading in the same
+  -- session would otherwise run the new script against the old Glu.
+  package.loaded[glu_module] = nil
 
   ---@diagnostic disable-next-line: assign-type-mismatch
   Highlighter = nil
 end
 
 function Highlighter:OnConnected()
-  self.route = {}
-  self.route_fade_in = {}
-  self.route_fade_out = {}
+  self:OnReset()
 end
 
 function Highlighter:OnStarted()
@@ -261,19 +252,23 @@ function Highlighter:OnMoved(current_room_id)
     return
   end
 
+  -- Mappers can raise this for any room update, not just a move, and the room
+  -- the player is still standing in keeps its highlight.
+  if current_room_id == self.previous_room_id then
+    return
+  end
+
   if self.previous_room_id then
-    if self.route[self.previous_room_id] then
-      -- if not self.route[self.previous_room_id].timer then
-      self:UnhighlightRoom(self.previous_room_id)
-      -- end
-    end
+    self:UnhighlightRoom(self.previous_room_id)
   end
   self.previous_room_id = current_room_id
 end
 
-function Highlighter:OnReset(exception)
+-- onSpeedwalkReset's exception says why the walk ended. That has no bearing on
+-- how the highlights go, which is always straight away.
+function Highlighter:OnReset()
   self.highlighting = false
-  self:Reset(exception)
+  self:Reset(true)
 end
 
 function Highlighter:OnComplete()
@@ -288,35 +283,23 @@ end
 function Highlighter:Reset(force)
   self:RemoveHighlights(force)
   self.previous_room_id = nil
-  if force then
-    self.route = {}
-  end
 end
 
 function Highlighter:HighlightRoom(room_id)
   local fg, _ = self:DetermineColours(room_id)
-  local alpha = self.prefs.alpha
 
-  -- In case of nil just make sure we got something.
-  fg = fg and fg or {}
-  fg[1] = fg[1] and fg[1] or 0
-  fg[2] = fg[2] and fg[2] or 0
-  fg[3] = fg[3] and fg[3] or 0
-
-  highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, alpha, 0)
+  highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, self.prefs.alpha, 0)
   self.route[room_id] = {}
 end
 
 function Highlighter:HighlightRoute()
-  if next(self.route) then
-    self:RemoveHighlights(true)
-  end
+  self:RemoveHighlights(true)
 
+  -- speedWalkPath doesn't exist until Mudlet has worked out a path, and
+  -- speedwalk() raises sysSpeedwalkStarted without needing one.
   ---@diagnostic disable-next-line: param-type-mismatch
-  for i, _ in ipairs(speedWalkDir) do
-    local room_id = tonumber(speedWalkPath[i])
-
-    assert(room_id ~= nil, "`room_id` is nil")
+  for i, room in ipairs(speedWalkPath or {}) do
+    local room_id = tonumber(room)
 
     if self.prefs.rollout == "on" then
       self.route[room_id] = {
@@ -331,55 +314,60 @@ function Highlighter:HighlightRoute()
 end
 
 function Highlighter:FadeOutHighlight(room_id)
-  if not self.route[room_id] then
+  local highlight = self.route[room_id]
+
+  if not highlight then
     return
   end
 
-  if not self.route[room_id].step then
-    return
-  end
+  local fade_step = highlight.step + 1
 
-  local fade_step = self.route[room_id].step + 1
-
-  local a = 255 - fade_step * self.prefs.step
+  local a = self.prefs.alpha - fade_step * self.prefs.step
 
   if a <= 0 then
     unHighlightRoom(room_id)
-    killTimer(self.route[room_id].timer)
+    killTimer(highlight.timer)
     self.route[room_id] = nil
     return
   end
 
-  local fg, _ = self:DetermineColours(room_id)
+  local fg = highlight.fg
   highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, a, 0)
 
-  self.route[room_id].step = fade_step
+  highlight.step = fade_step
 end
 
 ---@param room_id number Room ID to unhighlight
 ---@return nil
 function Highlighter:UnhighlightRoom(room_id)
-  if not self.route[room_id] then return end
+  local highlight = self.route[room_id]
 
-  if self.prefs.fade == "off" then
-    unHighlightRoom(room_id)
+  if not highlight or highlight.direction == "out" then
     return
   end
 
-  if self.route[room_id] then
-    if self.route[room_id].direction == "in" then
-      killTimer(self.route[room_id].timer)
-    elseif self.route[room_id].direction == "out" then
-      return
+  -- Still waiting to roll out, so it isn't on the map yet and there's nothing
+  -- to take off. Left alone, its timer would draw it after we've moved on.
+  if highlight.direction == "in" then
+    if highlight.timer then
+      killTimer(highlight.timer)
     end
+    self.route[room_id] = nil
+    return
+  end
+
+  if self.prefs.fade == "off" then
+    unHighlightRoom(room_id)
+    self.route[room_id] = nil
+    return
   end
 
   local fg, _ = self:DetermineColours(room_id)
-  highlightRoom(room_id, fg[1], fg[2], fg[3], 0, 0, 0, 1, 125, 0)
 
   self.route[room_id] = {
     step = 0,
     direction = "out",
+    fg = fg,
     timer = tempTimer(self.prefs.delay, function() self:FadeOutHighlight(room_id) end, true)
   }
 end
@@ -407,21 +395,14 @@ end
 ---@param force boolean|nil If true, immediately remove all highlights without fading
 ---@return nil
 function Highlighter:RemoveHighlights(force)
-  if not next(self.route) then
-    return
-  end
-
   for room_id, highlight in pairs(self.route) do
-    if force == true then
+    if force then
       unHighlightRoom(room_id)
       if highlight.timer then
         killTimer(highlight.timer)
       end
-      self.route[room_id] = nil
     else
-      if not highlight.timer then
-        self:UnhighlightRoom(room_id)
-      end
+      self:UnhighlightRoom(room_id)
     end
   end
 
@@ -455,6 +436,7 @@ Syntax: <b>highlight</b> [<b>command</b>]
 
   <b>highlight</b> - See this help text.
   <b>highlight set</b> - See your current preference settings.
+  <b>highlight set</b> <<b>preference</b>> - See the current value of a preference.
   <b>highlight set</b> <<b>preference</b>> <<b>value</b>> - Set a preference to a value.
 
   Available preferences:
