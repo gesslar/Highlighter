@@ -1,19 +1,30 @@
 {
+  "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
   "runtime": {
     "version": "Lua 5.1"
   },
   "diagnostics": {
     "ignoredFiles": "Disable",
     "globals": [
+      "gmod",
+      "mudlet",
       "helper"
+    ],
+    "disable": [
+      "lowercase-global"
     ]
   },
   "workspace": {
     "library": [
-      "$HOME/.config/Code/User/globalStorage/delwing.mudlet-scripts-sdk/docs"
+      "$HOME/.config/Code/User/globalStorage/delwing.mudlet-scripts-sdk/docs",
+      "$HOME/.config/VSCodium/User/globalStorage/delwing.mudlet-scripts-sdk/docs",
+      "node_modules/@gesslar/glu/build/library"
     ],
     "ignoreDir": [
-      "src/resources"
-    ]
+      "Glu-single.lua",
+      "src/resources/vendor",
+      "src/resources/test"
+    ],
+    "useGitIgnore": true
   }
 }
